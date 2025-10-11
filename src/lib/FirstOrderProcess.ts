@@ -187,6 +187,9 @@ export class FirstOrderProcess {
   setInitialOutput(value: number): void {
     this.state.output = value;
     this.state.internalState = value;
+    // Fill input history with steady-state input that would produce this output
+    const steadyStateInput = value / this.parameters.gain;
+    this.state.inputHistory.fill(steadyStateInput);
   }
 
   /**

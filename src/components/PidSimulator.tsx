@@ -53,8 +53,9 @@ const PidSimulator: React.FC = () => {
       {
         onDataUpdate: (data) => setSimulationData([...data]),
         onStateChange: (running) => {
-          setIsRunning(running);
-          setIsPaused(!running && (engineRef.current?.getSimulationState().isRunning ?? false));
+          const state = engineRef.current?.getSimulationState();
+          setIsRunning(state?.isRunning ?? false);
+          setIsPaused(state?.isPaused ?? false);
         },
         onError: (error) => {
           console.error('Simulation error:', error);

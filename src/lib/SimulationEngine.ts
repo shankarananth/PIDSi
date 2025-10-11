@@ -59,6 +59,9 @@ export class SimulationEngine {
     this.pidController = new PidController(pidParams, this.config.deltaTime);
     this.process = new FirstOrderProcess(processParams, this.config.deltaTime);
     this.callbacks = callbacks;
+    
+    // Initialize process at steady state (setpoint value)
+    this.process.setInitialOutput(this.setpoint);
   }
 
   /**
@@ -73,6 +76,19 @@ export class SimulationEngine {
     // Reset time if starting fresh
     if (this.dataHistory.length === 0) {
       this.simulationTime = 0;
+      
+      // Add initial data point at steady state
+      const processValue = this.process.getState().output;
+      const initialData: SimulationData = {
+        time: 0,
+        setpoint: this.setpoint,
+        processValue,
+        controllerOutput: processValue / this.process.getParameters().gain,
+        error: this.setpoint - processValue,
+        disturbance: 0
+      };
+      this.dataHistory.push(initialData);
+      this.callbacks.onDataUpdate?.(this.dataHistory);
     }
 
     this.intervalId = setInterval(() => {
@@ -88,15 +104,17 @@ export class SimulationEngine {
    * Pause the simulation
    */
   pause(): void {
-    this.isPaused = true;
-    this.callbacks.onStateChange?.(false);
+    if (this.isRunning && !this.isPaused) {
+      this.isPaused = true;
+      this.callbacks.onStateChange?.(false);
+    }
   }
 
   /**
    * Resume the simulation
    */
   resume(): void {
-    if (this.isRunning) {
+    if (this.isRunning && this.isPaused) {
       this.isPaused = false;
       this.callbacks.onStateChange?.(true);
     }
@@ -130,6 +148,9 @@ export class SimulationEngine {
     
     this.pidController.reset();
     this.process.reset();
+    
+    // Initialize process at steady state (setpoint value)
+    this.process.setInitialOutput(this.setpoint);
     
     this.callbacks.onDataUpdate?.(this.dataHistory);
     
@@ -217,6 +238,12 @@ export class SimulationEngine {
     this.targetSetpoint = value;
     this.setpointRampRate = rampRate;
     
+    // If simulation hasn't started yet, initialize process at new setpoint
+    if (this.dataHistory.length === 0) {
+      this.setpoint = value;
+      this.process.setInitialOutput(value);
+    }
+    
     if (rampRate === 0) {
       this.setpoint = value;
     }
@@ -284,7 +311,7 @@ export class SimulationEngine {
   }
 
   /**
-   * Get latest data point
+   * Get latest simulation data point
    */
   getLatestData(): SimulationData | null {
     return this.dataHistory.length > 0 
