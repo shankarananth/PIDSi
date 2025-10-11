@@ -32,9 +32,30 @@ ChartJS.register(
 interface RealtimeChartProps {
   data: SimulationData[];
   height?: number;
+  timeRange?: number;
+  yMin?: number;
+  yMax?: number;
+  cvMin?: number;
+  cvMax?: number;
+  onScaleChange?: (scales: {
+    timeRange: number;
+    yMin?: number;
+    yMax?: number;
+    cvMin?: number;
+    cvMax?: number;
+  }) => void;
 }
 
-const RealtimeChart: React.FC<RealtimeChartProps> = ({ data, height = 400 }) => {
+const RealtimeChart: React.FC<RealtimeChartProps> = ({ 
+  data, 
+  height = 400, 
+  timeRange = 60,
+  yMin,
+  yMax,
+  cvMin = 0,
+  cvMax = 100,
+  onScaleChange 
+}) => {
   const chartRef = useRef<ChartJS<'line', number[], number>>(null);
 
   // Prepare chart data
@@ -157,6 +178,8 @@ const RealtimeChart: React.FC<RealtimeChartProps> = ({ data, height = 400 }) => 
             return Number(value).toFixed(1);
           },
         },
+        min: yMin,
+        max: yMax,
       },
       y1: {
         type: 'linear' as const,
@@ -177,8 +200,8 @@ const RealtimeChart: React.FC<RealtimeChartProps> = ({ data, height = 400 }) => 
             return Number(value).toFixed(0) + '%';
           },
         },
-        min: 0,
-        max: 100,
+        min: cvMin,
+        max: cvMax,
       },
     },
     elements: {
@@ -195,7 +218,6 @@ const RealtimeChart: React.FC<RealtimeChartProps> = ({ data, height = 400 }) => 
   useEffect(() => {
     const chart = chartRef.current;
     if (chart && data.length > 0) {
-      const timeRange = 60; // Show last 60 seconds
       const latestTime = data[data.length - 1].time;
       const minTime = Math.max(0, latestTime - timeRange);
       
@@ -207,7 +229,7 @@ const RealtimeChart: React.FC<RealtimeChartProps> = ({ data, height = 400 }) => 
       
       chart.update('none');
     }
-  }, [data]);
+  }, [data, timeRange]);
 
   return (
     <div className="w-full" style={{ height: `${height}px` }}>

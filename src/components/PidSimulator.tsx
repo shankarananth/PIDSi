@@ -16,6 +16,15 @@ const PidSimulator: React.FC = () => {
   const [currentSetpoint, setCurrentSetpoint] = useState(50);
   const [showSettings, setShowSettings] = useState(false);
   
+  // Chart scale settings
+  const [chartScales, setChartScales] = useState({
+    timeRange: 60,
+    yMin: undefined as number | undefined,
+    yMax: undefined as number | undefined,
+    cvMin: 0,
+    cvMax: 100,
+  });
+  
   // Simulation engine
   const engineRef = useRef<SimulationEngine | null>(null);
   
@@ -210,12 +219,146 @@ const PidSimulator: React.FC = () => {
           </div>
         </div>
 
+        {/* Chart Scale Settings */}
+        {showSettings && (
+          <div className="glass-card p-4">
+            <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">
+              Chart Scale Settings
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Time Range (seconds)
+                </label>
+                <input
+                  type="number"
+                  min="10"
+                  max="1800"
+                  step="10"
+                  value={chartScales.timeRange}
+                  onChange={(e) => setChartScales(prev => ({ 
+                    ...prev, 
+                    timeRange: Number(e.target.value) || 60 
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md 
+                             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  PV/SP Min
+                </label>
+                <input
+                  type="number"
+                  step="1"
+                  value={chartScales.yMin || ''}
+                  placeholder="Auto"
+                  onChange={(e) => setChartScales(prev => ({ 
+                    ...prev, 
+                    yMin: e.target.value ? Number(e.target.value) : undefined 
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md 
+                             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  PV/SP Max
+                </label>
+                <input
+                  type="number"
+                  step="1"
+                  value={chartScales.yMax || ''}
+                  placeholder="Auto"
+                  onChange={(e) => setChartScales(prev => ({ 
+                    ...prev, 
+                    yMax: e.target.value ? Number(e.target.value) : undefined 
+                  }))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md 
+                             focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent
+                             bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                />
+              </div>
+              
+              <div className="flex gap-2">
+                <button
+                  onClick={() => setChartScales(prev => ({ 
+                    ...prev, 
+                    yMin: undefined, 
+                    yMax: undefined 
+                  }))}
+                  className="px-3 py-2 text-sm bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 
+                             text-gray-700 dark:text-gray-300 rounded transition-colors"
+                >
+                  Auto Y
+                </button>
+                <button
+                  onClick={() => setChartScales({ 
+                    timeRange: 60, 
+                    yMin: undefined, 
+                    yMax: undefined, 
+                    cvMin: 0, 
+                    cvMax: 100 
+                  })}
+                  className="px-3 py-2 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded transition-colors"
+                >
+                  Reset
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Real-time Chart */}
         <div className="glass-card p-6">
           <div className="mb-4">
-            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">
-              Real-time Trends
-            </h2>
+            <div className="flex flex-wrap items-center justify-between gap-4 mb-4">
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200">
+                Real-time Trends
+              </h2>
+              
+              {/* Chart Scale Controls */}
+              <div className="flex flex-wrap items-center gap-3 text-sm">
+                <div className="flex items-center gap-2">
+                  <label className="text-gray-600 dark:text-gray-400">Time:</label>
+                  <select
+                    value={chartScales.timeRange}
+                    onChange={(e) => setChartScales(prev => ({ ...prev, timeRange: Number(e.target.value) }))}
+                    className="px-2 py-1 border border-gray-300 dark:border-gray-600 rounded text-xs
+                               bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                  >
+                    <option value={30}>30s</option>
+                    <option value={60}>60s</option>
+                    <option value={120}>2min</option>
+                    <option value={300}>5min</option>
+                    <option value={600}>10min</option>
+                  </select>
+                </div>
+                
+                <div className="flex items-center gap-2">
+                  <label className="text-gray-600 dark:text-gray-400">Y-Scale:</label>
+                  <button
+                    onClick={() => setChartScales(prev => ({ 
+                      ...prev, 
+                      yMin: prev.yMin === undefined ? 0 : undefined,
+                      yMax: prev.yMax === undefined ? 100 : undefined
+                    }))}
+                    className={`px-2 py-1 text-xs rounded transition-colors ${
+                      chartScales.yMin !== undefined 
+                        ? 'bg-blue-500 text-white' 
+                        : 'bg-gray-200 dark:bg-gray-600 text-gray-700 dark:text-gray-300'
+                    }`}
+                  >
+                    {chartScales.yMin !== undefined ? 'Fixed' : 'Auto'}
+                  </button>
+                </div>
+              </div>
+            </div>
+            
             <div className="flex flex-wrap gap-4 text-sm">
               <div className="flex items-center gap-2">
                 <div className="w-3 h-3 bg-blue-500 rounded"></div>
@@ -235,6 +378,12 @@ const PidSimulator: React.FC = () => {
           <RealtimeChart 
             data={simulationData} 
             height={400}
+            timeRange={chartScales.timeRange}
+            yMin={chartScales.yMin}
+            yMax={chartScales.yMax}
+            cvMin={chartScales.cvMin}
+            cvMax={chartScales.cvMax}
+            onScaleChange={(scales) => setChartScales(prev => ({ ...prev, ...scales }))}
           />
         </div>
 

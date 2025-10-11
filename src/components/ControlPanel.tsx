@@ -35,7 +35,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   const [expandedSections, setExpandedSections] = useState({
     setpoint: true,
     pid: true,
-    process: false,
+    process: true,
     disturbance: false,
   });
 
@@ -333,7 +333,7 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
       )}
 
       {/* Process Parameters */}
-      {showSettings && renderSection(
+      {renderSection(
         'Process Model',
         <Target className="w-4 h-4 text-purple-600" />,
         'process',
