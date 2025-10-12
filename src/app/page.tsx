@@ -24,20 +24,7 @@ export default function Home() {
           <PidSimulator />
         </main>
         
-        <footer className="mt-8 text-center text-sm text-gray-500 dark:text-gray-400">
-          <p>
-            Inspired by{' '}
-            <a 
-              href="https://github.com/shankarananth/TarkaDyS" 
-              target="_blank" 
-              rel="noopener noreferrer"
-              className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 underline"
-            >
-              TarkaDyS
-            </a>
-            {' '} Built with Next.js and TypeScript
-          </p>
-        </footer>
+
       </div>
     </div>
   );

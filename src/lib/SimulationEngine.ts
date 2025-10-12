@@ -42,6 +42,7 @@ export class SimulationEngine {
   private setpoint: number = 50;
   private targetSetpoint: number = 50;
   private setpointRampRate: number = 0; // units per second for setpoint ramping
+  private speedMultiplier: number = 1; // Simulation speed multiplier
 
   constructor(
     pidParams: Partial<PidParameters> = {},
@@ -164,8 +165,8 @@ export class SimulationEngine {
    */
   private runSimulationStep(): void {
     try {
-      // Calculate steps needed to catch up to real time
-      const stepsPerUpdate = Math.max(1, Math.round(this.config.updateInterval / (this.config.deltaTime * 1000)));
+      // Calculate steps needed to catch up to real time, adjusted for speed multiplier
+      const stepsPerUpdate = Math.max(1, Math.round((this.config.updateInterval * this.speedMultiplier) / (this.config.deltaTime * 1000)));
       
       for (let i = 0; i < stepsPerUpdate; i++) {
         // Update setpoint with ramping
@@ -200,7 +201,7 @@ export class SimulationEngine {
           this.dataHistory.shift();
         }
         
-        this.simulationTime += this.config.deltaTime;
+        this.simulationTime += this.config.deltaTime * this.speedMultiplier;
       }
 
       // Notify callbacks
@@ -221,7 +222,7 @@ export class SimulationEngine {
       return;
     }
 
-    const rampStep = this.setpointRampRate * this.config.deltaTime;
+    const rampStep = this.setpointRampRate * this.config.deltaTime * this.speedMultiplier;
     const difference = this.targetSetpoint - this.setpoint;
     
     if (Math.abs(difference) <= Math.abs(rampStep)) {
@@ -272,6 +273,20 @@ export class SimulationEngine {
       : 0;
     
     this.pidController.setMode(mode, currentPv);
+  }
+
+  /**
+   * Set simulation speed multiplier
+   */
+  setSimulationSpeed(multiplier: number): void {
+    this.speedMultiplier = Math.max(0.1, Math.min(10, multiplier)); // Clamp between 0.1x and 10x
+  }
+
+  /**
+   * Get current simulation speed
+   */
+  getSimulationSpeed(): number {
+    return this.speedMultiplier;
   }
 
   /**

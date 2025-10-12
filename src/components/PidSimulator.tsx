@@ -15,6 +15,7 @@ const PidSimulator: React.FC = () => {
   const [simulationData, setSimulationData] = useState<SimulationData[]>([]);
   const [currentSetpoint, setCurrentSetpoint] = useState(50);
   const [showSettings, setShowSettings] = useState(false);
+  const [simulationSpeed, setSimulationSpeed] = useState(1);
   
   // Chart scale settings
   const [chartScales, setChartScales] = useState({
@@ -144,6 +145,13 @@ const PidSimulator: React.FC = () => {
     }
   }, []);
 
+  const handleSpeedChange = useCallback((speed: number) => {
+    setSimulationSpeed(speed);
+    if (engineRef.current) {
+      engineRef.current.setSimulationSpeed(speed);
+    }
+  }, []);
+
   const latestData = simulationData.length > 0 ? simulationData[simulationData.length - 1] : null;
   const performanceMetrics = engineRef.current?.getPerformanceMetrics() || {
     settlingTime: null,
@@ -194,6 +202,28 @@ const PidSimulator: React.FC = () => {
                 <RotateCcw className="w-4 h-4" />
                 Reset
               </button>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {/* Simulation Speed Control */}
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium text-gray-700 dark:text-gray-300">Speed:</span>
+                <div className="flex gap-1">
+                  {[0.5, 1, 2, 5, 10].map(speed => (
+                    <button
+                      key={speed}
+                      onClick={() => handleSpeedChange(speed)}
+                      className={`px-3 py-1 text-sm rounded transition-colors ${
+                        simulationSpeed === speed
+                          ? 'bg-purple-600 text-white'
+                          : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-300'
+                      }`}
+                    >
+                      {speed}x
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
 
             <div className="flex items-center gap-3">

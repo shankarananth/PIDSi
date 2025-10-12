@@ -235,15 +235,33 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
         <Sliders className="w-4 h-4 text-green-600" />,
         'pid',
         <div>
-          <SelectField
-            label="Control Mode"
-            value={pidParams.mode}
-            options={[
-              { value: ControlMode.Auto, label: 'Automatic' },
-              { value: ControlMode.Manual, label: 'Manual' }
-            ]}
-            onChange={(value) => onModeChange(value as ControlMode)}
-          />
+          <div className="mb-3">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+              Control Mode
+            </label>
+            <div className="flex gap-2">
+              <button
+                onClick={() => onModeChange(ControlMode.Auto)}
+                className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  pidParams.mode === ControlMode.Auto
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                Automatic
+              </button>
+              <button
+                onClick={() => onModeChange(ControlMode.Manual)}
+                className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  pidParams.mode === ControlMode.Manual
+                    ? 'bg-orange-600 text-white'
+                    : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-300'
+                }`}
+              >
+                Manual
+              </button>
+            </div>
+          </div>
           
           <SelectField
             label="Algorithm"
