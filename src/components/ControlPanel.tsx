@@ -289,25 +289,27 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           />
           
           <InputField
-            label="Integral Gain (Ki)"
-            value={pidParams.ki}
+            label="Integral Time (Ti)"
+            value={pidParams.ti}
             onChange={(value) => onPidParamsChange({
               ...pidParams,
-              ki: parseFloat(value) || 0
+              ti: parseFloat(value) || 0
             })}
-            step="0.01"
+            step="0.1"
             min="0"
+            unit="sec"
           />
           
           <InputField
-            label="Derivative Gain (Kd)"
-            value={pidParams.kd}
+            label="Derivative Time (Td)"
+            value={pidParams.td}
             onChange={(value) => onPidParamsChange({
               ...pidParams,
-              kd: parseFloat(value) || 0
+              td: parseFloat(value) || 0
             })}
-            step="0.01"
+            step="0.1"
             min="0"
+            unit="sec"
           />
           
           {pidParams.mode === ControlMode.Manual && (

@@ -29,11 +29,11 @@ const PidSimulator: React.FC = () => {
   // Simulation engine
   const engineRef = useRef<SimulationEngine | null>(null);
   
-  // PID Parameters
+  // PID Parameters - Optimized for first-order process (K=1, Tau=10s, Td=2s)
   const [pidParams, setPidParams] = useState<PidParameters>({
-    kp: 2.0,
-    ki: 0.5,
-    kd: 0.1,
+    kp: 0.6,    // Conservative proportional gain
+    ti: 12.0,   // Integral time = 1.2 * time constant (Cohen-Coon tuning)
+    td: 0.0,    // No derivative action by default
     outputMin: 0,
     outputMax: 100,
     algorithm: PidAlgorithm.BasicPID,
@@ -46,8 +46,8 @@ const PidSimulator: React.FC = () => {
     gain: 1.0,
     timeConstant: 10.0,
     deadTime: 2.0,
-    disturbanceLevel: 0.1,
-    noiseLevel: 0.01
+    disturbanceLevel: 0.0,
+    noiseLevel: 0.0
   });
 
   // Initialize simulation engine

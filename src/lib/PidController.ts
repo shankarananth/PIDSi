@@ -22,8 +22,8 @@ export enum ControlMode {
 
 export interface PidParameters {
   kp: number;           // Proportional gain
-  ki: number;           // Integral gain (1/Ti)
-  kd: number;           // Derivative gain (Td)
+  ti: number;           // Integral time in seconds (0 = no integral action)
+  td: number;           // Derivative time in seconds (0 = no derivative action)
   outputMin: number;    // Minimum output limit
   outputMax: number;    // Maximum output limit
   algorithm: PidAlgorithm;
@@ -48,8 +48,8 @@ export class PidController {
   constructor(parameters: Partial<PidParameters> = {}, deltaTime: number = 0.1) {
     this.parameters = {
       kp: 1.0,
-      ki: 0.1,
-      kd: 0.01,
+      ti: 10.0,      // 10 seconds integral time
+      td: 0.0,       // No derivative action by default
       outputMin: 0,
       outputMax: 100,
       algorithm: PidAlgorithm.BasicPID,
@@ -141,10 +141,14 @@ export class PidController {
    * Calculate delta output based on selected algorithm
    */
   private calculateDeltaOutput(): number {
-    const { kp, ki, kd } = this.parameters;
+    const { kp, ti, td } = this.parameters;
     const dt = this.deltaTime;
     const e = this.state.error;
     const pv = this.state.pv;
+    
+    // Convert time-based parameters to gains
+    const ki = ti > 0 ? kp / ti : 0;  // Integral gain = Kp / Ti
+    const kd = td * kp;               // Derivative gain = Td * Kp
 
     switch (this.parameters.algorithm) {
       case PidAlgorithm.BasicPID:

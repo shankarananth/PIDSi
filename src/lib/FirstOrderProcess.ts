@@ -39,8 +39,8 @@ export class FirstOrderProcess {
       gain: 1.0,
       timeConstant: 10.0,    // 10 seconds
       deadTime: 2.0,         // 2 seconds
-      disturbanceLevel: 0.1,  // 10% disturbance
-      noiseLevel: 0.01,       // 1% noise
+      disturbanceLevel: 0.0,  // No disturbance by default
+      noiseLevel: 0.0,        // No noise by default
       ...parameters
     };
 
