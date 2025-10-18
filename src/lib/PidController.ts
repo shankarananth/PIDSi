@@ -20,6 +20,13 @@ export enum ControlMode {
   Auto = 'Auto'
 }
 
+export enum AntiWindupMethod {
+  None = 'None',                        // No anti-windup protection
+  Clamping = 'Clamping',               // Simple output clamping
+  ConditionalIntegration = 'Conditional', // Conditional integration
+  BackCalculation = 'BackCalculation'   // Back calculation method
+}
+
 export interface PidParameters {
   kp: number;           // Proportional gain
   ti: number;           // Integral time in seconds (0 = no integral action)
@@ -29,6 +36,9 @@ export interface PidParameters {
   algorithm: PidAlgorithm;
   mode: ControlMode;
   manualOutput: number; // Manual output value
+  antiWindup: AntiWindupMethod; // Anti-reset windup method
+  windupLimit: number;  // Windup limit for back calculation (0-1)
+  trackingGain: number; // Tracking gain for back calculation (Kt)
 }
 
 export interface PidState {
@@ -55,6 +65,9 @@ export class PidController {
       algorithm: PidAlgorithm.BasicPID,
       mode: ControlMode.Manual,
       manualOutput: 50,
+      antiWindup: AntiWindupMethod.BackCalculation,
+      windupLimit: 0.1,  // 10% windup limit
+      trackingGain: 1.0,  // Unity tracking gain
       ...parameters
     };
 
@@ -118,20 +131,23 @@ export class PidController {
     this.state.pv[0] = processValue;
 
     let deltaOutput = 0;
+    let deltaIntegral = 0;
 
     // Skip calculation on first run to initialize history
     if (this.firstRun) {
       this.firstRun = false;
       deltaOutput = 0;
     } else {
-      deltaOutput = this.calculateDeltaOutput();
+      const result = this.calculateDeltaOutput();
+      deltaOutput = result.deltaOutput;
+      deltaIntegral = result.deltaIntegral;
     }
 
     // Calculate new output using velocity form
     const newOutput = this.state.lastOutput + deltaOutput;
 
     // Apply output limits and anti-reset windup
-    this.state.output = this.limitOutput(newOutput);
+    this.state.output = this.limitOutput(newOutput, deltaIntegral);
     this.state.lastOutput = this.state.output;
 
     return this.state.output;
@@ -140,7 +156,7 @@ export class PidController {
   /**
    * Calculate delta output based on selected algorithm
    */
-  private calculateDeltaOutput(): number {
+  private calculateDeltaOutput(): { deltaOutput: number; deltaIntegral: number } {
     const { kp, ti, td } = this.parameters;
     const dt = this.deltaTime;
     const e = this.state.error;
@@ -150,46 +166,88 @@ export class PidController {
     const ki = ti > 0 ? kp / ti : 0;  // Integral gain = Kp / Ti
     const kd = td * kp;               // Derivative gain = Td * Kp
 
+    // Calculate integral contribution
+    const deltaIntegral = ki * e[0] * dt;
+
     switch (this.parameters.algorithm) {
       case PidAlgorithm.BasicPID:
         // Traditional PID - fast response but has kicks
         // ΔOutput = Kp×(e[n]-e[n-1]) + Ki×e[n]×Δt + Kd×(e[n]-2×e[n-1]+e[n-2])/Δt
-        return kp * (e[0] - e[1]) + 
-               ki * e[0] * dt + 
-               kd * (e[0] - 2 * e[1] + e[2]) / dt;
+        return {
+          deltaOutput: kp * (e[0] - e[1]) + deltaIntegral + kd * (e[0] - 2 * e[1] + e[2]) / dt,
+          deltaIntegral
+        };
 
       case PidAlgorithm.I_PD:
         // Integral on error, P&D on measurement - eliminates both kicks
         // ΔOutput = Ki×e[n]×Δt + Kp×(PV[n-1]-PV[n]) + Kd×(PV[n-2]-2×PV[n-1]+PV[n])/Δt
-        return ki * e[0] * dt + 
-               kp * (pv[1] - pv[0]) + 
-               kd * (pv[2] - 2 * pv[1] + pv[0]) / dt;
+        return {
+          deltaOutput: deltaIntegral + kp * (pv[1] - pv[0]) + kd * (pv[2] - 2 * pv[1] + pv[0]) / dt,
+          deltaIntegral
+        };
 
       case PidAlgorithm.PI_D:
         // P&I on error, D on measurement - eliminates derivative kick only
         // ΔOutput = Kp×(e[n]-e[n-1]) + Ki×e[n]×Δt + Kd×(PV[n-2]-2×PV[n-1]+PV[n])/Δt
-        return kp * (e[0] - e[1]) + 
-               ki * e[0] * dt + 
-               kd * (pv[2] - 2 * pv[1] + pv[0]) / dt;
+        return {
+          deltaOutput: kp * (e[0] - e[1]) + deltaIntegral + kd * (pv[2] - 2 * pv[1] + pv[0]) / dt,
+          deltaIntegral
+        };
 
       default:
-        return 0;
+        return { deltaOutput: 0, deltaIntegral: 0 };
     }
   }
 
   /**
    * Apply output limits with anti-reset windup
    */
-  private limitOutput(output: number): number {
-    const { outputMin, outputMax } = this.parameters;
+  private limitOutput(output: number, deltaIntegral: number): number {
+    const { outputMin, outputMax, antiWindup, windupLimit, trackingGain, ti } = this.parameters;
     
+    let limitedOutput = output;
+    let integralCorrection = 0;
+    
+    // Apply output limits
     if (output > outputMax) {
-      return outputMax;
+      limitedOutput = outputMax;
+      integralCorrection = output - outputMax;
     } else if (output < outputMin) {
-      return outputMin;
+      limitedOutput = outputMin;
+      integralCorrection = output - outputMin;
     }
     
-    return output;
+    // Apply anti-windup method
+    if (integralCorrection !== 0 && ti > 0) {
+      switch (antiWindup) {
+        case AntiWindupMethod.None:
+          // No correction - allows windup
+          break;
+          
+        case AntiWindupMethod.Clamping:
+          // Simple clamping - prevent further integral accumulation
+          if ((integralCorrection > 0 && deltaIntegral > 0) || 
+              (integralCorrection < 0 && deltaIntegral < 0)) {
+            this.state.integralSum -= deltaIntegral;
+          }
+          break;
+          
+        case AntiWindupMethod.ConditionalIntegration:
+          // Conditional integration - only integrate if output not saturated
+          if (Math.abs(integralCorrection) > windupLimit) {
+            this.state.integralSum -= deltaIntegral;
+          }
+          break;
+          
+        case AntiWindupMethod.BackCalculation:
+          // Back calculation method
+          const backCalcCorrection = trackingGain * integralCorrection / ti * this.deltaTime;
+          this.state.integralSum -= backCalcCorrection;
+          break;
+      }
+    }
+    
+    return limitedOutput;
   }
 
   /**

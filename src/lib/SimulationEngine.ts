@@ -27,6 +27,29 @@ export interface SimulationCallbacks {
   onError?: (error: Error) => void;
 }
 
+export interface PerformanceMetrics {
+  // Step response metrics
+  settlingTime: number | null;
+  overshoot: number | null;
+  steadyStateError: number | null;
+  riseTime: number | null;
+  
+  // Integral performance metrics
+  iae: number;    // Integral Absolute Error
+  ise: number;    // Integral Square Error  
+  itae: number;   // Integral Time Absolute Error
+  
+  // Control effort metrics
+  totalVariation: number;  // Total variation of controller output
+  maxOutput: number;       // Maximum controller output
+  minOutput: number;       // Minimum controller output
+  
+  // Real-time statistics
+  currentError: number;
+  averageError: number;
+  errorStdDev: number;
+}
+
 export class SimulationEngine {
   private pidController: PidController;
   private process: FirstOrderProcess;
@@ -43,6 +66,24 @@ export class SimulationEngine {
   private targetSetpoint: number = 50;
   private setpointRampRate: number = 0; // units per second for setpoint ramping
   private speedMultiplier: number = 1; // Simulation speed multiplier
+  
+  // Performance tracking
+  private performanceMetrics: PerformanceMetrics = {
+    settlingTime: null,
+    overshoot: null,
+    steadyStateError: null,
+    riseTime: null,
+    iae: 0,
+    ise: 0,
+    itae: 0,
+    totalVariation: 0,
+    maxOutput: 0,
+    minOutput: 100,
+    currentError: 0,
+    averageError: 0,
+    errorStdDev: 0
+  };
+  private lastControllerOutput: number = 0;
 
   constructor(
     pidParams: Partial<PidParameters> = {},
@@ -150,6 +191,24 @@ export class SimulationEngine {
     this.pidController.reset();
     this.process.reset();
     
+    // Reset performance metrics
+    this.performanceMetrics = {
+      settlingTime: null,
+      overshoot: null,
+      steadyStateError: null,
+      riseTime: null,
+      iae: 0,
+      ise: 0,
+      itae: 0,
+      totalVariation: 0,
+      maxOutput: 0,
+      minOutput: 100,
+      currentError: 0,
+      averageError: 0,
+      errorStdDev: 0
+    };
+    this.lastControllerOutput = 0;
+    
     // Initialize process at steady state (setpoint value)
     this.process.setInitialOutput(this.setpoint);
     
@@ -195,6 +254,9 @@ export class SimulationEngine {
         };
 
         this.dataHistory.push(dataPoint);
+        
+        // Update performance metrics
+        this.updatePerformanceMetrics(dataPoint);
         
         // Limit data history size
         if (this.dataHistory.length > this.config.maxDataPoints) {
@@ -298,6 +360,42 @@ export class SimulationEngine {
   }
 
   /**
+   * Update performance metrics with new data point
+   */
+  private updatePerformanceMetrics(dataPoint: SimulationData): void {
+    const dt = this.config.deltaTime * this.speedMultiplier;
+    const absError = Math.abs(dataPoint.error);
+    
+    // Update integral metrics
+    this.performanceMetrics.iae += absError * dt;
+    this.performanceMetrics.ise += dataPoint.error * dataPoint.error * dt;
+    this.performanceMetrics.itae += absError * dataPoint.time * dt;
+    
+    // Update control effort metrics
+    this.performanceMetrics.maxOutput = Math.max(this.performanceMetrics.maxOutput, dataPoint.controllerOutput);
+    this.performanceMetrics.minOutput = Math.min(this.performanceMetrics.minOutput, dataPoint.controllerOutput);
+    
+    if (this.dataHistory.length > 1) {
+      const outputVariation = Math.abs(dataPoint.controllerOutput - this.lastControllerOutput);
+      this.performanceMetrics.totalVariation += outputVariation;
+    }
+    this.lastControllerOutput = dataPoint.controllerOutput;
+    
+    // Update current statistics
+    this.performanceMetrics.currentError = dataPoint.error;
+    
+    // Calculate average error and standard deviation (using recent data)
+    const recentData = this.dataHistory.slice(-100); // Last 100 points
+    if (recentData.length > 0) {
+      const errors = recentData.map(d => d.error);
+      this.performanceMetrics.averageError = errors.reduce((sum, e) => sum + e, 0) / errors.length;
+      
+      const variance = errors.reduce((sum, e) => sum + Math.pow(e - this.performanceMetrics.averageError, 2), 0) / errors.length;
+      this.performanceMetrics.errorStdDev = Math.sqrt(variance);
+    }
+  }
+
+  /**
    * Get current simulation state
    */
   getSimulationState() {
@@ -335,98 +433,115 @@ export class SimulationEngine {
   }
 
   /**
-   * Get performance metrics
+   * Get comprehensive performance metrics
    */
-  getPerformanceMetrics(): {
-    settlingTime: number | null;
-    overshoot: number | null;
-    steadyStateError: number | null;
-    riseTime: number | null;
-  } {
-    if (this.dataHistory.length < 10) {
-      return {
-        settlingTime: null,
-        overshoot: null,
-        steadyStateError: null,
-        riseTime: null
-      };
-    }
-
-    // Find the last significant setpoint change
-    let stepStartIndex = -1;
-    const threshold = 0.1;
+  getPerformanceMetrics(): PerformanceMetrics {
+    // Calculate step response metrics
+    let stepMetrics = {
+      settlingTime: null as number | null,
+      overshoot: null as number | null,
+      steadyStateError: null as number | null,
+      riseTime: null as number | null
+    };
     
-    for (let i = this.dataHistory.length - 1; i >= 10; i--) {
-      const currentSP = this.dataHistory[i].setpoint;
-      const prevSP = this.dataHistory[i - 10].setpoint;
+    if (this.dataHistory.length >= 5) {
+      // Find the last significant setpoint change
+      let stepStartIndex = -1;
+      const threshold = 0.05; // More sensitive threshold
       
-      if (Math.abs(currentSP - prevSP) > threshold) {
-        stepStartIndex = i - 10;
-        break;
+      for (let i = this.dataHistory.length - 1; i >= 5; i--) {
+        const currentSP = this.dataHistory[i].setpoint;
+        const prevSP = this.dataHistory[i - 5].setpoint;
+        
+        if (Math.abs(currentSP - prevSP) > threshold) {
+          stepStartIndex = i - 5;
+          break;
+        }
       }
-    }
 
-    if (stepStartIndex === -1) {
-      return {
-        settlingTime: null,
-        overshoot: null,
-        steadyStateError: null,
-        riseTime: null
-      };
-    }
+      if (stepStartIndex !== -1) {
+        const stepData = this.dataHistory.slice(stepStartIndex);
+        const finalSetpoint = stepData[stepData.length - 1].setpoint;
+        const initialValue = stepData[0].processValue;
+        const finalValue = stepData[stepData.length - 1].processValue;
+        
+        // Only calculate if there's a meaningful step change
+        const stepSize = Math.abs(finalSetpoint - initialValue);
+        if (stepSize > 0.1) {
+          // Calculate overshoot
+          const maxValue = Math.max(...stepData.map(d => d.processValue));
+          const minValue = Math.min(...stepData.map(d => d.processValue));
+          
+          let overshoot = 0;
+          if (finalSetpoint > initialValue) {
+            // Step up - check for overshoot above setpoint
+            overshoot = maxValue > finalSetpoint ? ((maxValue - finalSetpoint) / stepSize) * 100 : 0;
+          } else {
+            // Step down - check for undershoot below setpoint  
+            overshoot = minValue < finalSetpoint ? ((finalSetpoint - minValue) / stepSize) * 100 : 0;
+          }
 
-    const stepData = this.dataHistory.slice(stepStartIndex);
-    const finalSetpoint = stepData[stepData.length - 1].setpoint;
-    const initialValue = stepData[0].processValue;
-    const finalValue = stepData[stepData.length - 1].processValue;
-    
-    // Calculate overshoot
-    const maxValue = Math.max(...stepData.map(d => d.processValue));
-    const overshoot = finalSetpoint > initialValue 
-      ? Math.max(0, ((maxValue - finalSetpoint) / (finalSetpoint - initialValue)) * 100)
-      : Math.max(0, ((finalSetpoint - maxValue) / (initialValue - finalSetpoint)) * 100);
+          // Calculate steady-state error
+          const steadyStateError = Math.abs(finalSetpoint - finalValue);
 
-    // Calculate steady-state error
-    const steadyStateError = Math.abs(finalSetpoint - finalValue);
+          // Calculate rise time (10% to 90% of final value)
+          const valueRange = finalSetpoint - initialValue;
+          const tenPercent = initialValue + 0.1 * valueRange;
+          const ninetyPercent = initialValue + 0.9 * valueRange;
+          
+          let riseStartTime = null;
+          let riseEndTime = null;
+          
+          for (let i = 0; i < stepData.length; i++) {
+            if (finalSetpoint > initialValue) {
+              // Step up
+              if (riseStartTime === null && stepData[i].processValue >= tenPercent) {
+                riseStartTime = stepData[i].time;
+              }
+              if (riseEndTime === null && stepData[i].processValue >= ninetyPercent) {
+                riseEndTime = stepData[i].time;
+                break;
+              }
+            } else {
+              // Step down
+              if (riseStartTime === null && stepData[i].processValue <= tenPercent) {
+                riseStartTime = stepData[i].time;
+              }
+              if (riseEndTime === null && stepData[i].processValue <= ninetyPercent) {
+                riseEndTime = stepData[i].time;
+                break;
+              }
+            }
+          }
+          
+          const riseTime = (riseStartTime !== null && riseEndTime !== null) 
+            ? riseEndTime - riseStartTime 
+            : null;
 
-    // Calculate rise time (10% to 90% of final value)
-    const valueRange = finalSetpoint - initialValue;
-    const tenPercent = initialValue + 0.1 * valueRange;
-    const ninetyPercent = initialValue + 0.9 * valueRange;
-    
-    let riseStartTime = null;
-    let riseEndTime = null;
-    
-    for (let i = 0; i < stepData.length; i++) {
-      if (riseStartTime === null && stepData[i].processValue >= tenPercent) {
-        riseStartTime = stepData[i].time;
-      }
-      if (riseEndTime === null && stepData[i].processValue >= ninetyPercent) {
-        riseEndTime = stepData[i].time;
-        break;
-      }
-    }
-    
-    const riseTime = (riseStartTime !== null && riseEndTime !== null) 
-      ? riseEndTime - riseStartTime 
-      : null;
+          // Calculate settling time (time to reach within 2% of final value)
+          let settlingTime = null;
+          const settlingBand = 0.02 * stepSize;
+          
+          for (let i = stepData.length - 1; i >= 0; i--) {
+            if (Math.abs(stepData[i].processValue - finalSetpoint) > settlingBand) {
+              settlingTime = stepData[stepData.length - 1].time - stepData[i].time;
+              break;
+            }
+          }
 
-    // Calculate settling time (time to reach within 2% of final value)
-    let settlingTime = null;
-    const settlingBand = 0.02 * Math.abs(valueRange);
-    
-    for (let i = stepData.length - 1; i >= 0; i--) {
-      if (Math.abs(stepData[i].processValue - finalSetpoint) > settlingBand) {
-        settlingTime = stepData[stepData.length - 1].time - stepData[i].time;
-        break;
+          stepMetrics = {
+            settlingTime,
+            overshoot: overshoot > 0 ? overshoot : null,
+            steadyStateError,
+            riseTime
+          };
+        }
       }
     }
 
     return {
-      settlingTime,
-      overshoot: overshoot > 0 ? overshoot : null,
-      steadyStateError,
-      riseTime
+      ...stepMetrics,
+      ...this.performanceMetrics
     };
   }
 }

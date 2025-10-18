@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Play, Pause, Square, RotateCcw, Settings } from 'lucide-react';
 import { SimulationEngine, SimulationData } from '@/lib/SimulationEngine';
-import { PidAlgorithm, ControlMode, PidParameters } from '@/lib/PidController';
+import { PidAlgorithm, ControlMode, PidParameters, AntiWindupMethod } from '@/lib/PidController';
 import { ProcessParameters } from '@/lib/FirstOrderProcess';
 import RealtimeChart from './RealtimeChart';
 import ControlPanel from './ControlPanel';
@@ -38,7 +38,10 @@ const PidSimulator: React.FC = () => {
     outputMax: 100,
     algorithm: PidAlgorithm.BasicPID,
     mode: ControlMode.Auto,
-    manualOutput: 50
+    manualOutput: 50,
+    antiWindup: AntiWindupMethod.BackCalculation,
+    windupLimit: 0.1,
+    trackingGain: 1.0
   });
   
   // Process Parameters
@@ -157,7 +160,16 @@ const PidSimulator: React.FC = () => {
     settlingTime: null,
     overshoot: null,
     steadyStateError: null,
-    riseTime: null
+    riseTime: null,
+    iae: 0,
+    ise: 0,
+    itae: 0,
+    totalVariation: 0,
+    maxOutput: 0,
+    minOutput: 0,
+    currentError: 0,
+    averageError: 0,
+    errorStdDev: 0
   };
 
   return (
@@ -439,6 +451,7 @@ const PidSimulator: React.FC = () => {
           latestData={latestData}
           showSettings={showSettings}
           onToggleSettings={() => setShowSettings(!showSettings)}
+          isRunning={isRunning}
         />
       </div>
     </div>
