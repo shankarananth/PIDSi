@@ -36,6 +36,8 @@ const PidSimulator: React.FC = () => {
     td: 0.0,    // No derivative action by default
     outputMin: 0,
     outputMax: 100,
+    setpointMin: 0,
+    setpointMax: 100,
     algorithm: PidAlgorithm.BasicPID,
     mode: ControlMode.Auto,
     manualOutput: 50,

@@ -298,17 +298,23 @@ export class SimulationEngine {
    * Set new setpoint
    */
   setSetpoint(value: number, rampRate: number = 0): void {
-    this.targetSetpoint = value;
+    // Get current PID parameters to access setpoint limits
+    const pidParams = this.pidController.getParameters();
+    
+    // Clamp setpoint value within limits
+    const clampedValue = Math.max(pidParams.setpointMin, Math.min(pidParams.setpointMax, value));
+    
+    this.targetSetpoint = clampedValue;
     this.setpointRampRate = rampRate;
     
     // If simulation hasn't started yet, initialize process at new setpoint
     if (this.dataHistory.length === 0) {
-      this.setpoint = value;
-      this.process.setInitialOutput(value);
+      this.setpoint = clampedValue;
+      this.process.setInitialOutput(clampedValue);
     }
     
     if (rampRate === 0) {
-      this.setpoint = value;
+      this.setpoint = clampedValue;
     }
   }
 
@@ -535,6 +541,23 @@ export class SimulationEngine {
             steadyStateError,
             riseTime
           };
+        }
+      } else if (this.dataHistory.length >= 20) {
+        // If no step change detected but we have enough data, calculate basic metrics
+        // from the current steady-state performance
+        const recentData = this.dataHistory.slice(-20);
+        const currentSetpoint = recentData[recentData.length - 1].setpoint;
+        const currentPV = recentData[recentData.length - 1].processValue;
+        
+        // Calculate steady-state error from recent data
+        const steadyStateError = Math.abs(currentSetpoint - currentPV);
+        
+        // Only show steady-state error if we're in a relatively stable condition
+        const recentErrors = recentData.map(d => Math.abs(d.error));
+        const avgRecentError = recentErrors.reduce((sum, e) => sum + e, 0) / recentErrors.length;
+        
+        if (avgRecentError < 2) { // If reasonably stable
+          stepMetrics.steadyStateError = steadyStateError;
         }
       }
     }

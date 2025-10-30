@@ -33,6 +33,8 @@ export interface PidParameters {
   td: number;           // Derivative time in seconds (0 = no derivative action)
   outputMin: number;    // Minimum output limit
   outputMax: number;    // Maximum output limit
+  setpointMin: number;  // Minimum setpoint limit
+  setpointMax: number;  // Maximum setpoint limit
   algorithm: PidAlgorithm;
   mode: ControlMode;
   manualOutput: number; // Manual output value
@@ -62,6 +64,8 @@ export class PidController {
       td: 0.0,       // No derivative action by default
       outputMin: 0,
       outputMax: 100,
+      setpointMin: 0,
+      setpointMax: 100,
       algorithm: PidAlgorithm.BasicPID,
       mode: ControlMode.Manual,
       manualOutput: 50,

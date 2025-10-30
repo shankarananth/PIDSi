@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronDown, ChevronUp, Zap, Target, Sliders } from 'lucide-react';
 import { PidAlgorithm, ControlMode, PidParameters, AntiWindupMethod } from '@/lib/PidController';
 import { ProcessParameters } from '@/lib/FirstOrderProcess';
@@ -35,7 +35,6 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
   isRunning,
 }) => {
   const [expandedSections, setExpandedSections] = useState({
-    setpoint: true,
     pid: true,
     process: true,
     disturbance: false,
@@ -43,6 +42,22 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
 
   const [setpointInput, setSetpointInput] = useState(currentSetpoint.toString());
   const [rampRate, setRampRate] = useState('0');
+  const [currentTime, setCurrentTime] = useState('--:--:--');
+
+  // Update time on client side only to avoid hydration mismatch
+  useEffect(() => {
+    const updateTime = () => {
+      setCurrentTime(new Date().toLocaleTimeString());
+    };
+    
+    // Set initial time
+    updateTime();
+    
+    // Update every second
+    const interval = setInterval(updateTime, 1000);
+    
+    return () => clearInterval(interval);
+  }, []);
 
   const toggleSection = (section: keyof typeof expandedSections) => {
     setExpandedSections(prev => ({
@@ -224,222 +239,284 @@ const ControlPanel: React.FC<ControlPanelProps> = ({
           </div>
           
           <div className="text-xs text-gray-600 font-medium">
-            {new Date().toLocaleTimeString()}
+            {currentTime}
           </div>
         </div>
       </div>
 
-      {/* Setpoint Control */}
-      {renderSection(
-        'Setpoint Control',
-        <Target className="w-4 h-4 text-blue-600" />,
-        'setpoint',
-        <div>
-          <InputField
-            label="Setpoint Value"
-            value={setpointInput}
-            onChange={setSetpointInput}
-            onBlur={handleSetpointSubmit}
-            step="0.1"
-          />
-          
-          <InputField
-            label="Ramp Rate"
-            value={rampRate}
-            onChange={setRampRate}
-            step="0.1"
-            min="0"
-            unit="units/sec"
-          />
-          
-          <button
-            onClick={handleSetpointSubmit}
-            className="w-full mb-3 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
-          >
-            Apply Setpoint
-          </button>
-          
-          <div className="grid grid-cols-3 gap-2 text-sm">
-            {[0, 25, 50, 75, 100].map(value => (
-              <button
-                key={value}
-                onClick={() => handleQuickSetpoint(value)}
-                className="px-2 py-1 bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 
-                           text-gray-700 dark:text-gray-300 rounded transition-colors"
-              >
-                {value}
-              </button>
-            ))}
+      {/* Combined Controller Panel */}
+      <div className="glass-card">
+        {/* Header */}
+        <button
+          onClick={() => toggleSection('pid')}
+          className="w-full px-4 py-3 flex items-center justify-between hover:bg-gray-50 dark:hover:bg-gray-700/50 transition-colors"
+        >
+          <div className="flex items-center gap-2">
+            <Sliders className="w-4 h-4 text-green-600" />
+            <h3 className="font-semibold text-gray-800 dark:text-gray-200">
+              PID Controller
+            </h3>
           </div>
-        </div>
-      )}
-
-      {/* PID Parameters */}
-      {renderSection(
-        'PID Controller',
-        <Sliders className="w-4 h-4 text-green-600" />,
-        'pid',
-        <div>
-          <div className="mb-3">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-              Control Mode
-            </label>
-            <div className="flex gap-2">
-              <button
-                onClick={() => onModeChange(ControlMode.Auto)}
-                className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  pidParams.mode === ControlMode.Auto
-                    ? 'bg-green-600 text-white'
-                    : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-300'
-                }`}
-              >
-                Automatic
-              </button>
-              <button
-                onClick={() => onModeChange(ControlMode.Manual)}
-                className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-                  pidParams.mode === ControlMode.Manual
-                    ? 'bg-orange-600 text-white'
-                    : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-300'
-                }`}
-              >
-                Manual
-              </button>
-            </div>
-          </div>
-          
-          <SelectField
-            label="Algorithm"
-            value={pidParams.algorithm}
-            options={[
-              { value: PidAlgorithm.BasicPID, label: 'Basic PID (fast, has kicks)' },
-              { value: PidAlgorithm.I_PD, label: 'I-PD (smooth, no kicks)' },
-              { value: PidAlgorithm.PI_D, label: 'PI-D (no derivative kick)' }
-            ]}
-            onChange={(value) => onPidParamsChange({
-              ...pidParams,
-              algorithm: value as PidAlgorithm
-            })}
-          />
-          
-          <InputField
-            label="Proportional Gain (Kp)"
-            value={pidParams.kp}
-            onChange={(value) => onPidParamsChange({
-              ...pidParams,
-              kp: parseFloat(value) || 0
-            })}
-            step="0.1"
-            min="0"
-          />
-          
-          <InputField
-            label="Integral Time (Ti)"
-            value={pidParams.ti}
-            onChange={(value) => onPidParamsChange({
-              ...pidParams,
-              ti: parseFloat(value) || 0
-            })}
-            step="0.1"
-            min="0"
-            unit="sec"
-          />
-          
-          <InputField
-            label="Derivative Time (Td)"
-            value={pidParams.td}
-            onChange={(value) => onPidParamsChange({
-              ...pidParams,
-              td: parseFloat(value) || 0
-            })}
-            step="0.1"
-            min="0"
-            unit="sec"
-          />
-          
-          {pidParams.mode === ControlMode.Manual && (
-            <InputField
-              label="Manual Output"
-              value={pidParams.manualOutput}
-              onChange={(value) => onPidParamsChange({
-                ...pidParams,
-                manualOutput: parseFloat(value) || 0
-              })}
-              step="1"
-              min="0"
-              max="100"
-              unit="%"
-            />
+          {expandedSections.pid ? (
+            <ChevronUp className="w-4 h-4 text-gray-500" />
+          ) : (
+            <ChevronDown className="w-4 h-4 text-gray-500" />
           )}
-          
-          <SelectField
-            label="Anti-Windup Method"
-            value={pidParams.antiWindup}
-            options={[
-              { value: AntiWindupMethod.None, label: 'None' },
-              { value: AntiWindupMethod.Clamping, label: 'Clamping' },
-              { value: AntiWindupMethod.ConditionalIntegration, label: 'Conditional Integration' },
-              { value: AntiWindupMethod.BackCalculation, label: 'Back Calculation' }
-            ]}
-            onChange={(value) => onPidParamsChange({
-              ...pidParams,
-              antiWindup: value as AntiWindupMethod
-            })}
-          />
-          
-          {(pidParams.antiWindup === AntiWindupMethod.ConditionalIntegration || 
-            pidParams.antiWindup === AntiWindupMethod.BackCalculation) && (
-            <div className="grid grid-cols-2 gap-2">
+        </button>
+
+        {expandedSections.pid && (
+          <div className="p-4 border-t border-gray-200 dark:border-gray-700">
+            {/* Operating Section */}
+            <div className="mb-6 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+              <h4 className="font-medium text-sm text-blue-900 dark:text-blue-200 mb-3 flex items-center gap-2">
+                <Target className="w-4 h-4" />
+                Operating Parameters
+              </h4>
+              
+              {/* Control Mode */}
+              <div className="mb-3">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Control Mode
+                </label>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => onModeChange(ControlMode.Auto)}
+                    className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                      pidParams.mode === ControlMode.Auto
+                        ? 'bg-green-600 text-white'
+                        : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-300'
+                    }`}
+                  >
+                    Automatic
+                  </button>
+                  <button
+                    onClick={() => onModeChange(ControlMode.Manual)}
+                    className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                      pidParams.mode === ControlMode.Manual
+                        ? 'bg-orange-600 text-white'
+                        : 'bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-300'
+                    }`}
+                  >
+                    Manual
+                  </button>
+                </div>
+              </div>
+
+              {/* Setpoint Entry */}
               <InputField
-                label="Windup Limit"
-                value={pidParams.windupLimit}
-                onChange={(value) => onPidParamsChange({
-                  ...pidParams,
-                  windupLimit: parseFloat(value) || 0
-                })}
-                step="0.01"
-                min="0"
-                max="1"
+                label="Setpoint Value"
+                value={setpointInput}
+                onChange={setSetpointInput}
+                onBlur={handleSetpointSubmit}
+                step="0.1"
               />
-              {pidParams.antiWindup === AntiWindupMethod.BackCalculation && (
+              
+              <InputField
+                label="Ramp Rate"
+                value={rampRate}
+                onChange={setRampRate}
+                step="0.1"
+                min="0"
+                unit="units/sec"
+              />
+              
+              <button
+                onClick={handleSetpointSubmit}
+                className="w-full mb-3 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md transition-colors"
+              >
+                Apply Setpoint
+              </button>
+              
+              <div className="grid grid-cols-5 gap-2 text-sm mb-4">
+                {[0, 25, 50, 75, 100].map(value => (
+                  <button
+                    key={value}
+                    onClick={() => handleQuickSetpoint(value)}
+                    className="px-2 py-1 bg-white dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600 
+                               text-gray-700 dark:text-gray-300 rounded border border-gray-300 dark:border-gray-600 transition-colors"
+                  >
+                    {value}
+                  </button>
+                ))}
+              </div>
+              
+              {/* Setpoint Limits */}
+              <div className="grid grid-cols-2 gap-2 mb-3">
                 <InputField
-                  label="Tracking Gain (Kt)"
-                  value={pidParams.trackingGain}
+                  label="Setpoint Min"
+                  value={pidParams.setpointMin}
                   onChange={(value) => onPidParamsChange({
                     ...pidParams,
-                    trackingGain: parseFloat(value) || 0
+                    setpointMin: parseFloat(value) || 0
+                  })}
+                  step="1"
+                />
+                <InputField
+                  label="Setpoint Max"
+                  value={pidParams.setpointMax}
+                  onChange={(value) => onPidParamsChange({
+                    ...pidParams,
+                    setpointMax: parseFloat(value) || 100
+                  })}
+                  step="1"
+                />
+              </div>
+              
+              {/* Output Limits */}
+              <div className="grid grid-cols-2 gap-2 mb-3">
+                <InputField
+                  label="Output Min"
+                  value={pidParams.outputMin}
+                  onChange={(value) => onPidParamsChange({
+                    ...pidParams,
+                    outputMin: parseFloat(value) || 0
+                  })}
+                  step="1"
+                  unit="%"
+                />
+                <InputField
+                  label="Output Max"
+                  value={pidParams.outputMax}
+                  onChange={(value) => onPidParamsChange({
+                    ...pidParams,
+                    outputMax: parseFloat(value) || 0
+                  })}
+                  step="1"
+                  unit="%"
+                />
+              </div>
+
+              {/* Manual Output (only shown in Manual mode) */}
+              {pidParams.mode === ControlMode.Manual && (
+                <InputField
+                  label="Manual Output"
+                  value={pidParams.manualOutput}
+                  onChange={(value) => onPidParamsChange({
+                    ...pidParams,
+                    manualOutput: parseFloat(value) || 0
+                  })}
+                  step="1"
+                  min="0"
+                  max="100"
+                  unit="%"
+                />
+              )}
+            </div>
+
+            {/* Tuning Parameters Section */}
+            <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg border border-green-200 dark:border-green-800">
+              <h4 className="font-medium text-sm text-green-900 dark:text-green-200 mb-3 flex items-center gap-2">
+                <Sliders className="w-4 h-4" />
+                Tuning Parameters
+              </h4>
+              
+              {/* Algorithm Selection */}
+              <SelectField
+                label="Algorithm"
+                value={pidParams.algorithm}
+                options={[
+                  { value: PidAlgorithm.BasicPID, label: 'Basic PID (fast, has kicks)' },
+                  { value: PidAlgorithm.I_PD, label: 'I-PD (smooth, no kicks)' },
+                  { value: PidAlgorithm.PI_D, label: 'PI-D (no derivative kick)' }
+                ]}
+                onChange={(value) => onPidParamsChange({
+                  ...pidParams,
+                  algorithm: value as PidAlgorithm
+                })}
+              />
+              
+              {/* PID Gains */}
+              <div className="space-y-3 mb-4">
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase">Gains</p>
+                
+                <InputField
+                  label="Proportional Gain (Kp)"
+                  value={pidParams.kp}
+                  onChange={(value) => onPidParamsChange({
+                    ...pidParams,
+                    kp: parseFloat(value) || 0
                   })}
                   step="0.1"
                   min="0"
                 />
-              )}
+                
+                <InputField
+                  label="Integral Time (Ti)"
+                  value={pidParams.ti}
+                  onChange={(value) => onPidParamsChange({
+                    ...pidParams,
+                    ti: parseFloat(value) || 0
+                  })}
+                  step="0.1"
+                  min="0"
+                  unit="sec"
+                />
+                
+                <InputField
+                  label="Derivative Time (Td)"
+                  value={pidParams.td}
+                  onChange={(value) => onPidParamsChange({
+                    ...pidParams,
+                    td: parseFloat(value) || 0
+                  })}
+                  step="0.1"
+                  min="0"
+                  unit="sec"
+                />
+              </div>
+              
+              {/* Anti-Windup Configuration */}
+              <div className="space-y-3">
+                <p className="text-xs font-medium text-gray-600 dark:text-gray-400 uppercase">Windup Calculation</p>
+                
+                <SelectField
+                  label="Anti-Windup Method"
+                  value={pidParams.antiWindup}
+                  options={[
+                    { value: AntiWindupMethod.None, label: 'None' },
+                    { value: AntiWindupMethod.Clamping, label: 'Clamping' },
+                    { value: AntiWindupMethod.ConditionalIntegration, label: 'Conditional Integration' },
+                    { value: AntiWindupMethod.BackCalculation, label: 'Back Calculation' }
+                  ]}
+                  onChange={(value) => onPidParamsChange({
+                    ...pidParams,
+                    antiWindup: value as AntiWindupMethod
+                  })}
+                />
+                
+                {(pidParams.antiWindup === AntiWindupMethod.ConditionalIntegration || 
+                  pidParams.antiWindup === AntiWindupMethod.BackCalculation) && (
+                  <div className="grid grid-cols-2 gap-2">
+                    <InputField
+                      label="Windup Limit"
+                      value={pidParams.windupLimit}
+                      onChange={(value) => onPidParamsChange({
+                        ...pidParams,
+                        windupLimit: parseFloat(value) || 0
+                      })}
+                      step="0.01"
+                      min="0"
+                      max="1"
+                    />
+                    {pidParams.antiWindup === AntiWindupMethod.BackCalculation && (
+                      <InputField
+                        label="Tracking Gain (Kt)"
+                        value={pidParams.trackingGain}
+                        onChange={(value) => onPidParamsChange({
+                          ...pidParams,
+                          trackingGain: parseFloat(value) || 0
+                        })}
+                        step="0.1"
+                        min="0"
+                      />
+                    )}
+                  </div>
+                )}
+              </div>
             </div>
-          )}
-          
-          <div className="grid grid-cols-2 gap-2">
-            <InputField
-              label="Output Min"
-              value={pidParams.outputMin}
-              onChange={(value) => onPidParamsChange({
-                ...pidParams,
-                outputMin: parseFloat(value) || 0
-              })}
-              step="1"
-              unit="%"
-            />
-            <InputField
-              label="Output Max"
-              value={pidParams.outputMax}
-              onChange={(value) => onPidParamsChange({
-                ...pidParams,
-                outputMax: parseFloat(value) || 100
-              })}
-              step="1"
-              unit="%"
-            />
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       {/* Process Parameters */}
       {renderSection(

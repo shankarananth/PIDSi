@@ -105,7 +105,20 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
               <AlertCircle className="w-4 h-4 text-blue-600" />
               <span className="font-medium">Step Response Analysis</span>
             </div>
-            <p>Change the setpoint while the simulation is running to analyze step response characteristics.</p>
+            <p>1. Start the simulation</p>
+            <p>2. Wait for it to stabilize (a few seconds)</p>
+            <p>3. Change the setpoint to see step response metrics</p>
+          </div>
+        )}
+        
+        {/* Show partial guidance if some metrics are available */}
+        {(metrics.steadyStateError !== null && (!metrics.riseTime || !metrics.overshoot)) && (
+          <div className="text-sm text-gray-600 dark:text-gray-400 mb-4 p-3 bg-green-50 dark:bg-green-900/20 rounded border border-green-200 dark:border-green-800">
+            <div className="flex items-center gap-2 mb-1">
+              <Target className="w-4 h-4 text-green-600" />
+              <span className="font-medium">Steady-State Analysis Available</span>
+            </div>
+            <p>Make a larger setpoint change to get full step response analysis</p>
           </div>
         )}
         
@@ -227,7 +240,7 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
                 metrics.riseTime < 5 ? 'text-green-600' :
                 metrics.riseTime < 15 ? 'text-yellow-600' : 'text-red-600'
               }>
-                {metrics.riseTime === null ? 'N/A' :
+                {metrics.riseTime === null ? 'N/A - Make setpoint change' :
                  metrics.riseTime < 5 ? 'Fast' :
                  metrics.riseTime < 15 ? 'Medium' : 'Slow'}
               </span>
@@ -236,11 +249,17 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
             <div className="flex justify-between items-center">
               <span className="text-gray-600 dark:text-gray-400">Stability:</span>
               <span className={
-                metrics.overshoot === null ? 'text-gray-500' :
+                metrics.overshoot === null ? (
+                  metrics.errorStdDev < 0.5 ? 'text-green-600' :
+                  metrics.errorStdDev < 2 ? 'text-yellow-600' : 'text-red-600'
+                ) :
                 metrics.overshoot < 5 ? 'text-green-600' :
                 metrics.overshoot < 25 ? 'text-yellow-600' : 'text-red-600'
               }>
-                {metrics.overshoot === null ? 'N/A' :
+                {metrics.overshoot === null ? (
+                  metrics.errorStdDev < 0.5 ? 'Stable (Low Variation)' :
+                  metrics.errorStdDev < 2 ? 'Moderate Variation' : 'Unstable (High Variation)'
+                ) :
                  metrics.overshoot < 5 ? 'Excellent' :
                  metrics.overshoot < 25 ? 'Acceptable' : 'Poor'}
               </span>
@@ -249,11 +268,17 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
             <div className="flex justify-between items-center">
               <span className="text-gray-600 dark:text-gray-400">Accuracy:</span>
               <span className={
-                metrics.steadyStateError === null ? 'text-gray-500' :
+                metrics.steadyStateError === null ? (
+                  Math.abs(latestData.error) < 1 ? 'text-green-600' :
+                  Math.abs(latestData.error) < 3 ? 'text-yellow-600' : 'text-red-600'
+                ) :
                 metrics.steadyStateError < 1 ? 'text-green-600' :
                 metrics.steadyStateError < 5 ? 'text-yellow-600' : 'text-red-600'
               }>
-                {metrics.steadyStateError === null ? 'N/A' :
+                {metrics.steadyStateError === null ? (
+                  Math.abs(latestData.error) < 1 ? 'Good (Low Error)' :
+                  Math.abs(latestData.error) < 3 ? 'Moderate Error' : 'High Error'
+                ) :
                  metrics.steadyStateError < 1 ? 'Excellent' :
                  metrics.steadyStateError < 5 ? 'Good' : 'Poor'}
               </span>
@@ -274,6 +299,18 @@ const MetricsPanel: React.FC<MetricsPanelProps> = ({
                   : latestData.controllerOutput < 15 || latestData.controllerOutput > 85 
                   ? 'Near Limits' 
                   : 'Normal'}
+              </span>
+            </div>
+            
+            {/* Overall Performance Indicator */}
+            <div className="flex justify-between items-center border-t pt-2 mt-3">
+              <span className="text-gray-600 dark:text-gray-400 font-medium">Overall Performance:</span>
+              <span className={
+                (Math.abs(latestData.error) < 1 && metrics.errorStdDev < 0.5) ? 'text-green-600' :
+                (Math.abs(latestData.error) < 3 && metrics.errorStdDev < 2) ? 'text-yellow-600' : 'text-red-600'
+              }>
+                {(Math.abs(latestData.error) < 1 && metrics.errorStdDev < 0.5) ? 'Excellent' :
+                 (Math.abs(latestData.error) < 3 && metrics.errorStdDev < 2) ? 'Good' : 'Needs Tuning'}
               </span>
             </div>
           </div>
